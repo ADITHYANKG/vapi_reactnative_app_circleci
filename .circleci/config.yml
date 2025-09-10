@@ -53,7 +53,11 @@ jobs:
 
       - run:
           name: Build APK
-          command: cd android && ./gradlew assembleDebug --console=plain --info --no-daemon --max-workers=1
+          command: |
+            cd android
+            chmod +x gradlew
+            ./gradlew assembleDebug --console=plain --info --no-daemon --max-workers=1 --refresh-dependencies || \
+            (echo "Retrying build..." && ./gradlew assembleDebug --console=plain --info --no-daemon --max-workers=1 --refresh-dependencies)
           no_output_timeout: 60m
 
       - save_cache:
