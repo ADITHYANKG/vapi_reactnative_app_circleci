@@ -1,4 +1,4 @@
-version: 2.1
+=version: 2.1
 
 jobs:
   android-build:
@@ -10,7 +10,6 @@ jobs:
     steps:
       - checkout
 
-      # Install JDK (React Native still requires JDK 11 in many cases)
       - run:
           name: Install JDK 11
           command: |
@@ -20,27 +19,25 @@ jobs:
             sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
             java -version
 
-      # Install Ninja for CMake builds
       - run:
           name: Install Ninja
           command: sudo apt-get install -y ninja-build
 
-      # Install dependencies
       - restore_cache:
           keys:
             - node-modules-{{ checksum "package-lock.json" }}
+
       - run: npm install
+
       - save_cache:
           paths:
             - node_modules
           key: node-modules-{{ checksum "package-lock.json" }}
 
-      # Gradle cache
       - restore_cache:
           keys:
             - gradle-cache-{{ checksum "android/build.gradle" }}
 
-      # Configure Gradle
       - run:
           name: Configure Gradle Properties
           command: |
@@ -50,19 +47,20 @@ jobs:
             echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
             echo "android.enableAapt2Daemon=false" >> ~/.gradle/gradle.properties
 
-      # Build Debug APK
+      - run:
+          name: Fix Gradlew Permissions
+          command: chmod +x android/gradlew
+
       - run:
           name: Build APK
           command: cd android && ./gradlew assembleDebug --console=plain --info --no-daemon --max-workers=1
           no_output_timeout: 60m
 
-      # Save Gradle cache
       - save_cache:
           paths:
             - ~/.gradle
           key: gradle-cache-{{ checksum "android/build.gradle" }}
 
-      # Store build artifact (APK)
       - store_artifacts:
           path: android/app/build/outputs/apk/debug
           destination: android-apk
