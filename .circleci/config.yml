@@ -1,0 +1,74 @@
+version: 2.1
+
+jobs:
+  android-build:
+    docker:
+      - image: cimg/android:2023.09-node
+    working_directory: ~/project
+    environment:
+      GRADLE_OPTS: "-Xmx1500m -Dorg.gradle.daemon=false -Dorg.gradle.workers.max=1"
+    steps:
+      - checkout
+
+      # Install JDK (React Native still requires JDK 11 in many cases)
+      - run:
+          name: Install JDK 11
+          command: |
+            sudo apt-get update
+            sudo apt-get install -y openjdk-11-jdk
+            sudo update-alternatives --install /usr/bin/java java /usr/lib/jvm/java-11-openjdk-amd64/bin/java 1
+            sudo update-alternatives --set java /usr/lib/jvm/java-11-openjdk-amd64/bin/java
+            java -version
+
+      # Install Ninja for CMake builds
+      - run:
+          name: Install Ninja
+          command: sudo apt-get install -y ninja-build
+
+      # Install dependencies
+      - restore_cache:
+          keys:
+            - node-modules-{{ checksum "package-lock.json" }}
+      - run: npm install
+      - save_cache:
+          paths:
+            - node_modules
+          key: node-modules-{{ checksum "package-lock.json" }}
+
+      # Gradle cache
+      - restore_cache:
+          keys:
+            - gradle-cache-{{ checksum "android/build.gradle" }}
+
+      # Configure Gradle
+      - run:
+          name: Configure Gradle Properties
+          command: |
+            mkdir -p ~/.gradle
+            echo "org.gradle.jvmargs=-Xmx1500m -XX:+HeapDumpOnOutOfMemoryError -Dfile.encoding=UTF-8" >> ~/.gradle/gradle.properties
+            echo "org.gradle.workers.max=1" >> ~/.gradle/gradle.properties
+            echo "org.gradle.daemon=false" >> ~/.gradle/gradle.properties
+            echo "android.enableAapt2Daemon=false" >> ~/.gradle/gradle.properties
+
+      # Build Debug APK
+      - run:
+          name: Build APK
+          command: cd android && ./gradlew assembleDebug --console=plain --info --no-daemon --max-workers=1
+          no_output_timeout: 60m
+
+      # Save Gradle cache
+      - save_cache:
+          paths:
+            - ~/.gradle
+          key: gradle-cache-{{ checksum "android/build.gradle" }}
+
+      # Store build artifact (APK)
+      - store_artifacts:
+          path: android/app/build/outputs/apk/debug
+          destination: android-apk
+
+workflows:
+  version: 2
+  build_and_test:
+    jobs:
+      - android-build
